@@ -1,0 +1,160 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Windows.Forms;
+
+namespace Gui
+{
+    /// <summary>
+    /// Main game window: shared game state, setup, and the engine loop. The rest of Form1 lives in the Form1.*.cs files.
+    /// </summary>
+    public partial class Form1 : Form
+    {
+        // --- GAME FLOW ---
+        private enum GameState { ModeSelect, CharSelect, ArenaSelect, Armory, FightIntro, Battle, KO }
+        private GameState currentState = GameState.ModeSelect;
+
+        private int selectedMode = 0;
+        private bool isVsCPU = false;
+        private int p1CharIndex = 0, p2CharIndex = 1;
+        private bool p1Locked = false;
+        private int selectedArenaIndex = 0;
+
+        // --- LOADOUTS AND ARMORY STATE ---
+        private Loadout p1Loadout = new Loadout();
+        private Loadout p2Loadout = new Loadout();
+        private Loadout ActiveLoadout => armoryPlayer == 1 ? p1Loadout : p2Loadout;
+        private int armoryPlayer = 1;
+        private int armoryTab = 0;
+        private int armoryCursor = 0;
+        private string armoryMessage = "";
+        private int armoryFlash = 0;
+        private Color armoryFlashColor = Color.Gold;
+
+        // Arena select animation
+        private float arenaSlide = 0f;          // eased position of the selector (in card indexes)
+        private int arenaPrevIndex = 0;         // arena that is sliding out of the preview box
+        private int arenaTransitionDir = 1;     // +1 = new arena slides in from the right
+        private float arenaTransition = 1f;     // 0 = just changed, 1 = finished
+        private string rewardText = "";
+
+        // --- BATTLE STATS ---
+        private int p1Health = 100, p2Health = 100;
+        private int p1RedHealth = 100, p2RedHealth = 100;
+        private const int MaxHealth = 100;
+        private int p1Heat = 60, p2Heat = 60;
+        private const int MaxHeat = 100;
+        private int p1ComboHits = 0, p2ComboHits = 0;
+        private int p1ComboTimer = 0, p2ComboTimer = 0;
+        private int roundTimer = 60;
+        private int cpuDecisionTimer = 0;
+
+        // --- VISUAL FX ---
+        private List<ShockwaveRing> shockwaves = new List<ShockwaveRing>();
+        private List<FloorCrater> craters = new List<FloorCrater>();
+        private List<AmbientMote> ambientMotes = new List<AmbientMote>();
+        private List<GhostTrail> trails = new List<GhostTrail>();
+        private List<Particle> particles = new List<Particle>();
+        private List<LightningArc> lightnings = new List<LightningArc>();
+
+        // Physics
+        private const float GroundLevel = 270f;
+        private const float Gravity = 1.35f;
+        private float p1X = 260, p1Y = GroundLevel;
+        private float p2X = 660, p2Y = GroundLevel;
+        private float p1VelX = 0, p1VelY = 0;
+        private float p2VelX = 0, p2VelY = 0;
+        private int p1Action = 0, p2Action = 0;
+        private int p1ActionTimer = 0, p2ActionTimer = 0;
+
+        // Visual Engine Timers
+        private int speedLineTimer = 0;
+        private PointF speedLineCenter = PointF.Empty;
+        private int hitStopFreeze = 0;
+        private int rageCinematicFlash = 0;
+        private float cameraZoom = 1.0f;
+        private float targetZoom = 1.0f;
+        private int screenShake = 0;
+        private int introCounter = 60;
+        private string matchResultText = "";
+        private float bounceCycle = 0;
+        private float stageAnimationCycle = 0;
+        private Random rng = new Random();
+        private System.Windows.Forms.Timer renderTimer = new System.Windows.Forms.Timer();
+        private System.Windows.Forms.Timer clockTimer = new System.Windows.Forms.Timer();
+
+        public Form1()
+        {
+            InitializeComponent();
+
+            this.Text = "Clash Arena";
+            this.ClientSize = new Size(1024, 620);
+            this.DoubleBuffered = true;
+            this.FormBorderStyle = FormBorderStyle.FixedSingle;
+            this.MaximizeBox = false;
+
+            for (int i = 0; i < 45; i++)
+            {
+                ambientMotes.Add(new AmbientMote
+                {
+                    X = rng.Next(-200, 1300),
+                    Y = rng.Next(50, 580),
+                    Vx = (float)(rng.NextDouble() * 1.5 - 0.75),
+                    Vy = (float)(rng.NextDouble() * -2.0 - 0.5),
+                    Size = rng.Next(3, 8),
+                    Alpha = rng.Next(70, 220)
+                });
+            }
+
+            renderTimer.Interval = 16;
+            renderTimer.Tick += EngineLoop_Tick;
+            renderTimer.Start();
+
+            clockTimer.Interval = 1000;
+            clockTimer.Tick += (s, e) =>
+            {
+                if (currentState == GameState.Battle && roundTimer > 0 && hitStopFreeze == 0)
+                {
+                    roundTimer--;
+                }
+            };
+            clockTimer.Start();
+
+            this.KeyPreview = true;
+            this.KeyDown += Form1_KeyDown;
+        }
+
+        private void EngineLoop_Tick(object? sender, EventArgs e)
+        {
+            if (hitStopFreeze > 0)
+            {
+                hitStopFreeze--;
+                this.Invalidate();
+                return;
+            }
+
+            bounceCycle += 0.08f;
+            if (armoryFlash > 0) armoryFlash--;
+            arenaSlide += (selectedArenaIndex - arenaSlide) * 0.2f;
+            if (arenaTransition < 1f) arenaTransition = Math.Min(1f, arenaTransition + 0.09f);
+            stageAnimationCycle += 0.04f; // Drives the movement of lava, smoke, and billboards
+            if (rageCinematicFlash > 0) rageCinematicFlash--;
+            if (speedLineTimer > 0) speedLineTimer--;
+
+            if (currentState == GameState.FightIntro)
+            {
+                introCounter--;
+                if (introCounter <= 0) currentState = GameState.Battle;
+            }
+            else if (currentState == GameState.Battle)
+            {
+                if (isVsCPU) UpdateCPUAI();
+                UpdateBattlePhysics();
+            }
+
+            UpdateVisualEffects();
+            this.Invalidate();
+        }
+    }
+}
