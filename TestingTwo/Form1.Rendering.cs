@@ -33,6 +33,7 @@ namespace Gui
             }
             else
             {
+                // FightIntro, Battle, KO at MatchResult ay dumadaan dito
                 int w = this.ClientSize.Width, h = this.ClientSize.Height;
 
                 if (rageCinematicFlash > 0)
@@ -95,11 +96,46 @@ namespace Gui
                     }
                 }
 
-                DrawFighterReflection(g, p1X, p1Y, p1Action, true, GameData.Roster[p1CharIndex]);
-                DrawFighterReflection(g, p2X, p2Y, p2Action, false, GameData.Roster[p2CharIndex]);
+                DrawFighterReflection(g, p1X, p1Y, p1Action, p1FacingRight, GameData.Roster[p1CharIndex]);
+                DrawFighterReflection(g, p2X, p2Y, p2Action, p2FacingRight, GameData.Roster[p2CharIndex]);
 
-                DrawArticulatedFighter(g, p1X, p1Y, p1Action, true, GameData.Roster[p1CharIndex], p1Loadout, p1Sprite);
-                DrawArticulatedFighter(g, p2X, p2Y, p2Action, false, GameData.Roster[p2CharIndex], p2Loadout, p2Sprite);
+                DrawArticulatedFighter(g, p1X, p1Y, p1Action, p1FacingRight, GameData.Roster[p1CharIndex], p1Loadout, p1Sprite);
+                DrawArticulatedFighter(g, p2X, p2Y, p2Action, p2FacingRight, GameData.Roster[p2CharIndex], p2Loadout, p2Sprite);
+
+                // --- DRAW SUPERPOWER SHIELDS / BARRIERS ---
+                if (p1HasShield)
+                {
+                    using (Pen shieldPen = new Pen(Color.FromArgb(200, Color.Cyan), 4))
+                    using (SolidBrush shieldFill = new SolidBrush(Color.FromArgb(40, Color.Cyan)))
+                    {
+                        g.FillEllipse(shieldFill, p1X - 10, p1Y - 10, 110, 150);
+                        g.DrawEllipse(shieldPen, p1X - 10, p1Y - 10, 110, 150);
+                    }
+                }
+
+                if (p2HasShield)
+                {
+                    using (Pen shieldPen = new Pen(Color.FromArgb(200, Color.Cyan), 4))
+                    using (SolidBrush shieldFill = new SolidBrush(Color.FromArgb(40, Color.Cyan)))
+                    {
+                        g.FillEllipse(shieldFill, p2X - 10, p2Y - 10, 110, 150);
+                        g.DrawEllipse(shieldPen, p2X - 10, p2Y - 10, 110, 150);
+                    }
+                }
+
+                // --- DRAW SUPERPOWER MAGIC PROJECTILES ---
+                foreach (var proj in activeProjectiles)
+                {
+                    using (SolidBrush projBrush = new SolidBrush(proj.ElementColor))
+                    using (SolidBrush coreBrush = new SolidBrush(Color.White))
+                    using (Pen glowPen = new Pen(Color.FromArgb(180, proj.ElementColor), 3))
+                    {
+                        int size = proj.Radius * 2;
+                        g.FillEllipse(projBrush, proj.X - proj.Radius, proj.Y - proj.Radius, size, size);
+                        g.FillEllipse(coreBrush, proj.X - (proj.Radius / 2), proj.Y - (proj.Radius / 2), proj.Radius, proj.Radius);
+                        g.DrawEllipse(glowPen, proj.X - proj.Radius - 3, proj.Y - proj.Radius - 3, size + 6, size + 6);
+                    }
+                }
 
                 foreach (var s in shockwaves)
                 {
@@ -126,6 +162,21 @@ namespace Gui
                     }
                 }
 
+                // --- DRAW FLOATING DAMAGE & SKILL POPUPS ---
+                foreach (var popup in damagePopups)
+                {
+                    int alpha = Math.Clamp(popup.Lifetime * 6, 0, 255);
+                    using (Font popFont = new Font("Impact", 14, FontStyle.Italic))
+                    using (SolidBrush popBrush = new SolidBrush(Color.FromArgb(alpha, popup.Color)))
+                    using (Pen borderPen = new Pen(Color.FromArgb(alpha, Color.Black), 2))
+                    {
+                        GraphicsPath path = new GraphicsPath();
+                        path.AddString(popup.Text, popFont.FontFamily, (int)popFont.Style, popFont.Size, new PointF(popup.X, popup.Y), StringFormat.GenericDefault);
+                        g.DrawPath(borderPen, path);
+                        g.FillPath(popBrush, path);
+                    }
+                }
+
                 if (speedLineTimer > 0)
                 {
                     using (Pen slp = new Pen(Color.FromArgb(160, 255, 255, 255), 2))
@@ -144,25 +195,38 @@ namespace Gui
 
                 g.ResetTransform();
                 DrawModernHUD(g);
+                DrawRoundPips(g);   // score ng rounds sa taas (parang Tekken)
 
                 if (currentState == GameState.FightIntro)
                 {
-                    DrawAnnouncement(g, introCounter > 25 ? "ROUND 1" : "FIGHT!", Color.Yellow);
+                    // ROUND 1 / ROUND 2 / FINAL ROUND, tapos FIGHT!
+                    DrawAnnouncement(g, introCounter > 35 ? GetRoundTitle() : "FIGHT!", Color.Yellow);
                 }
                 else if (currentState == GameState.KO)
                 {
-                    DrawAnnouncement(g, "K.O.", Color.Red);
+                    // "K.O.!" o "TIME UP" bawat round, walang R prompt dito
+                    DrawAnnouncement(g, roundBannerText, Color.Red);
+
                     using Font wf = new Font("Impact", 24, FontStyle.Italic);
                     SizeF sz = g.MeasureString(matchResultText, wf);
-                    g.DrawString(matchResultText, wf, Brushes.Gold, (w / 2f) - (sz.Width / 2f), 280);
+                    g.DrawString(matchResultText, wf, Brushes.Gold, (w / 2f) - (sz.Width / 2f), 330);
+                }
+                else if (currentState == GameState.MatchResult)
+                {
+                    // Results screen: pagkatapos lang ng huling round
+                    DrawAnnouncement(g, "MATCH OVER", Color.Gold);
+
+                    using Font wf = new Font("Impact", 24, FontStyle.Italic);
+                    SizeF sz = g.MeasureString(matchResultText, wf);
+                    g.DrawString(matchResultText, wf, Brushes.Gold, (w / 2f) - (sz.Width / 2f), 330);
 
                     using Font infoFont = new Font("Segoe UI", 12, FontStyle.Bold);
                     SizeF rewardSize = g.MeasureString(rewardText, infoFont);
-                    g.DrawString(rewardText, infoFont, Brushes.Gold, (w / 2f) - (rewardSize.Width / 2f), 330);
+                    g.DrawString(rewardText, infoFont, Brushes.Gold, (w / 2f) - (rewardSize.Width / 2f), 385);
 
                     string restartText = "[ R ] Return to Mode Menu";
                     SizeF restartSize = g.MeasureString(restartText, infoFont);
-                    g.DrawString(restartText, infoFont, Brushes.White, (w / 2f) - (restartSize.Width / 2f), 365);
+                    g.DrawString(restartText, infoFont, Brushes.White, (w / 2f) - (restartSize.Width / 2f), 420);
                 }
             }
         }
@@ -305,7 +369,7 @@ namespace Gui
 
             using (Font nf = new Font("Impact", 11, FontStyle.Italic))
             {
-                string tag = (!faceRight && isVsCPU) ? "CPU: " + fighter.Name : fighter.Name;
+                string tag = GetFighterTag(fighter, sprite);
                 g.DrawString(tag, nf, Brushes.White, x + 5, cy - 25);
             }
         }

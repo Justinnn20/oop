@@ -8,25 +8,58 @@ namespace Gui
 {
     public partial class Form1 : Form
     {
+        // ------------------------------------------------------------------
+        // Helper: nagdo-draw ng text na SIGURADONG kasya sa maxWidth.
+        // Kapag masyadong malapad, pinaliliit ang font hanggang kumasya.
+        // centered = true  -> ang x ay GITNA ng text
+        // centered = false -> ang x ay KALIWANG GILID ng text
+        // ------------------------------------------------------------------
+        private void DrawFit(Graphics g, string text, string family, float size, FontStyle style,
+                             Color color, float x, float y, float maxWidth, bool centered = false)
+        {
+            StringFormat fmt = StringFormat.GenericTypographic;
+            float s = size;
+            Font f = new Font(family, s, style);
+            while (s > 6f && g.MeasureString(text, f, int.MaxValue, fmt).Width > maxWidth)
+            {
+                f.Dispose();
+                s -= 0.5f;
+                f = new Font(family, s, style);
+            }
+
+            using (f)
+            using (SolidBrush b = new SolidBrush(color))
+            {
+                float tw = g.MeasureString(text, f, int.MaxValue, fmt).Width;
+                float dx = centered ? x - (tw / 2f) : x;
+                g.DrawString(text, f, b, dx, y, fmt);
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // MODE SELECT
+        // ------------------------------------------------------------------
         private void DrawModeSelection(Graphics g)
         {
             int w = this.ClientSize.Width, h = this.ClientSize.Height;
             g.Clear(Color.FromArgb(10, 10, 15));
+            float cx = w / 2f;
 
-            using (Font titleF = new Font("Impact", 44, FontStyle.Italic))
-            {
-                const string gameTitle = "Clash Arena";
-                float titleX = (w / 2f) - (g.MeasureString(gameTitle, titleF).Width / 2f);
-                g.DrawString(gameTitle, titleF, Brushes.OrangeRed, titleX + 3, 60);
-                g.DrawString(gameTitle, titleF, Brushes.Gold, titleX, 57);
-            }
-            g.DrawString("SELECT BATTLE MODE", new Font("Segoe UI", 14, FontStyle.Bold), Brushes.Cyan, w / 2 - 100, 130);
+            // Title (may anino)
+            DrawFit(g, "Clash Arena", "Impact", 44, FontStyle.Italic, Color.OrangeRed, cx + 3, 60, w - 120, true);
+            DrawFit(g, "Clash Arena", "Impact", 44, FontStyle.Italic, Color.Gold, cx, 57, w - 120, true);
+            DrawFit(g, "SELECT BATTLE MODE", "Segoe UI", 14, FontStyle.Bold, Color.Cyan, cx, 128, w - 120, true);
 
-            int cardW = 320, cardH = 260, y = 180;
-            DrawModeCard(g, 140, y, cardW, cardH, "2-PLAYER BATTLE", "Player 1 vs Player 2 (Local PVP)", selectedMode == 0, Color.Cyan);
-            DrawModeCard(g, 560, y, cardW, cardH, "ARCADE MODE (VS CPU)", "Player 1 vs Computer AI Opponent", selectedMode == 1, Color.Crimson);
+            // Dalawang card, nakagitna bilang grupo
+            int gap = 50;
+            int cardW = Math.Min(400, (w - 120 - gap) / 2);
+            int cardH = 260, y = 180;
+            int startX = (int)((w - ((cardW * 2) + gap)) / 2f);
 
-            g.DrawString("[ ARROW KEYS ] Choose Mode   |   [ ENTER ] Confirm", new Font("Segoe UI", 12, FontStyle.Bold), Brushes.Gold, w / 2 - 210, h - 70);
+            DrawModeCard(g, startX, y, cardW, cardH, "2-PLAYER BATTLE", "Player 1 vs Player 2 (Local PVP)", selectedMode == 0, Color.Cyan);
+            DrawModeCard(g, startX + cardW + gap, y, cardW, cardH, "ARCADE MODE (VS CPU)", "Player 1 vs Computer AI Opponent", selectedMode == 1, Color.Crimson);
+
+            DrawFit(g, "[ ARROW KEYS ] Choose Mode   |   [ ENTER ] Confirm", "Segoe UI", 12, FontStyle.Bold, Color.Gold, cx, h - 70, w - 60, true);
         }
 
         private void DrawModeCard(Graphics g, int x, int y, int w, int h, string title, string sub, bool isSelected, Color neon)
@@ -38,56 +71,70 @@ namespace Gui
             {
                 g.FillRectangle(bg, x + 2, y + 2, w - 4, h - 4);
             }
-            using (Font tf = new Font("Impact", 22, FontStyle.Italic)) g.DrawString(title, tf, isSelected ? Brushes.White : Brushes.Gray, x + 25, y + 40);
-            using (Font sf = new Font("Segoe UI", 10)) g.DrawString(sub, sf, Brushes.Silver, x + 25, y + 90);
+
+            float textW = w - 40;
+            DrawFit(g, title, "Impact", 22, FontStyle.Italic, isSelected ? Color.White : Color.Gray, x + 20, y + 40, textW);
+            DrawFit(g, sub, "Segoe UI", 10, FontStyle.Regular, Color.Silver, x + 20, y + 90, textW);
+
             if (isSelected)
             {
-                using (Font selF = new Font("Impact", 16)) g.DrawString("★ READY TO FIGHT ★", selF, new SolidBrush(neon), x + 50, y + 180);
+                DrawFit(g, "★ READY TO FIGHT ★", "Impact", 16, FontStyle.Regular, neon, x + (w / 2f), y + 180, textW, true);
             }
         }
 
+        // ------------------------------------------------------------------
+        // CHARACTER SELECT
+        // ------------------------------------------------------------------
         private void DrawCharacterSelection(Graphics g)
         {
             int w = this.ClientSize.Width, h = this.ClientSize.Height;
             g.Clear(Color.FromArgb(10, 10, 15));
+            float cx = w / 2f;
 
-            using (Font titleF = new Font("Impact", 34, FontStyle.Italic))
-            {
-                string header = isVsCPU ? "CHOOSE YOUR FIGHTER (VS CPU)" : "CHARACTER SELECT (PVP)";
-                g.DrawString(header, titleF, Brushes.Gold, w / 2 - 200, 25);
-            }
+            string header = isVsCPU ? "CHOOSE YOUR FIGHTER (VS CPU)" : "CHARACTER SELECT (PVP)";
+            DrawFit(g, header, "Impact", 34, FontStyle.Italic, Color.Gold, cx, 25, w - 80, true);
 
-            int cardW = 210, cardH = 340, startX = 60, startY = 100, spacing = 240;
-            for (int i = 0; i < GameData.Roster.Length; i++)
+            // Dynamic: kahit ilan ang fighters, kasya at nakagitna
+            int n = GameData.Roster.Length;
+            int margin = 40, gap = 12;
+            int cardW = Math.Min(210, (w - (margin * 2) - (gap * (n - 1))) / n);
+            int cardH = 340, startY = 100;
+            int spacing = cardW + gap;
+            int startX = (int)((w - ((cardW * n) + (gap * (n - 1)))) / 2f);
+
+            for (int i = 0; i < n; i++)
             {
-                int cx = startX + (i * spacing);
+                int cardX = startX + (i * spacing);
                 bool isP1 = p1CharIndex == i;
                 bool isP2 = p2CharIndex == i;
 
                 Color border = isP1 ? Color.Cyan : (isP2 ? Color.Crimson : Color.FromArgb(50, 50, 60));
-                using (Pen bp = new Pen(border, (isP1 || isP2) ? 4 : 2)) g.DrawRectangle(bp, cx, startY, cardW, cardH);
+                using (Pen bp = new Pen(border, (isP1 || isP2) ? 4 : 2)) g.DrawRectangle(bp, cardX, startY, cardW, cardH);
 
-                using (LinearGradientBrush cb = new LinearGradientBrush(new Rectangle(cx, startY, cardW, cardH),
+                using (LinearGradientBrush cb = new LinearGradientBrush(new Rectangle(cardX, startY, cardW, cardH),
                     Color.FromArgb(28, 28, 42), Color.FromArgb(10, 10, 15), LinearGradientMode.Vertical))
                 {
-                    g.FillRectangle(cb, cx + 2, startY + 2, cardW - 4, cardH - 4);
+                    g.FillRectangle(cb, cardX + 2, startY + 2, cardW - 4, cardH - 4);
                 }
 
-                DrawArticulatedFighter(g, cx + 50, startY + 70, 0, true, GameData.Roster[i]);
+                // Fighter nakagitna sa card (ang gitna ng katawan ay x + 54)
+                DrawArticulatedFighter(g, cardX + (cardW / 2f) - 54f, startY + 70, 0, true, GameData.Roster[i]);
 
-                using (SolidBrush b = new SolidBrush(Color.Black)) g.FillRectangle(b, cx + 2, startY + cardH - 75, cardW - 4, 73);
-                g.DrawString(GameData.Roster[i].Name, new Font("Impact", 13), Brushes.White, cx + 10, startY + cardH - 70);
-                g.DrawString(GameData.Roster[i].Style, new Font("Segoe UI", 8), Brushes.LightGray, cx + 10, startY + cardH - 48);
-                g.DrawString("SKILL: " + GameData.Roster[i].SpecialSkill, new Font("Segoe UI", 7, FontStyle.Bold), new SolidBrush(GameData.Roster[i].AuraColor), cx + 10, startY + cardH - 30);
+                using (SolidBrush b = new SolidBrush(Color.Black)) g.FillRectangle(b, cardX + 2, startY + cardH - 75, cardW - 4, 73);
 
-                if (isP1) g.DrawString(p1Locked ? "★ P1 LOCKED" : "► P1 SELECT", new Font("Impact", 11), Brushes.Cyan, cx + 20, startY + 12);
-                if (isP2 && p1Locked && !isVsCPU) g.DrawString("► P2 SELECT", new Font("Impact", 11), Brushes.Crimson, cx + 20, startY + 30);
+                float tx = cardX + 10, tw = cardW - 20;
+                DrawFit(g, GameData.Roster[i].Name, "Impact", 13, FontStyle.Regular, Color.White, tx, startY + cardH - 70, tw);
+                DrawFit(g, GameData.Roster[i].Style, "Segoe UI", 8, FontStyle.Regular, Color.LightGray, tx, startY + cardH - 48, tw);
+                DrawFit(g, "SKILL: " + GameData.Roster[i].SpecialSkill, "Segoe UI", 7, FontStyle.Bold, GameData.Roster[i].AuraColor, tx, startY + cardH - 30, tw);
+
+                if (isP1) DrawFit(g, p1Locked ? "★ P1 LOCKED" : "► P1 SELECT", "Impact", 11, FontStyle.Regular, Color.Cyan, cardX + 12, startY + 12, cardW - 24);
+                if (isP2 && p1Locked && !isVsCPU) DrawFit(g, "► P2 SELECT", "Impact", 11, FontStyle.Regular, Color.Crimson, cardX + 12, startY + 30, cardW - 24);
             }
 
             string prompt = isVsCPU
                 ? "[ ARROWS ] Choose Character   |   [ ENTER ] Confirm and Choose Arena   |   [ BACKSPACE ] Back to Mode"
                 : (!p1Locked ? "[ ARROWS ] Choose P1  |  [ ENTER ] Lock P1" : "[ ARROWS ] Choose P2  |  [ ENTER ] Choose Arena");
-            g.DrawString(prompt, new Font("Segoe UI", 12, FontStyle.Bold), Brushes.Gold, w / 2 - 320, h - 50);
+            DrawFit(g, prompt, "Segoe UI", 12, FontStyle.Bold, Color.Gold, cx, h - 50, w - 60, true);
         }
 
         private static float EaseOutCubic(float t)
@@ -129,24 +176,25 @@ namespace Gui
             g.Restore(state);
         }
 
+        // ------------------------------------------------------------------
+        // ARENA SELECT
+        // ------------------------------------------------------------------
         private void DrawArenaSelection(Graphics g)
         {
             int w = this.ClientSize.Width, h = this.ClientSize.Height;
             g.Clear(Color.FromArgb(10, 10, 15));
+            float cx = w / 2f;
 
-            using Font titleF = new Font("Impact", 30, FontStyle.Italic);
             using Font nameF = new Font("Impact", 16);
             using Font cardF = new Font("Impact", 11);
             using Font subF = new Font("Segoe UI", 9);
-            using Font promptF = new Font("Segoe UI", 12, FontStyle.Bold);
 
-            const string header = "SELECT BATTLE STAGE";
-            SizeF headerSize = g.MeasureString(header, titleF);
-            g.DrawString(header, titleF, Brushes.Cyan, (w - headerSize.Width) / 2f, 12);
+            DrawFit(g, "SELECT BATTLE STAGE", "Impact", 30, FontStyle.Italic, Color.Cyan, cx, 12, w - 80, true);
 
             ArenaInfo current = GameData.Arenas[selectedArenaIndex];
 
-            Rectangle box = new Rectangle((w - 520) / 2, 64, 520, 315);
+            int boxW = Math.Min(520, w - 80);
+            Rectangle box = new Rectangle((w - boxW) / 2, 64, boxW, (int)(boxW * 315f / 520f));
             int glowAlpha = 130;
             using (Pen glow = new Pen(Color.FromArgb(glowAlpha, current.RingNeon), 10))
             {
@@ -177,11 +225,17 @@ namespace Gui
                 g.DrawRectangle(boxBorder, box);
             }
 
-            int cardW = 210, cardH = 110, spacing = 260, baseY = 410;
+            // Dynamic: kasya kahit ilan ang stages, nakagitna
+            int n = GameData.Arenas.Length;
+            int sideMargin = 30;
+            int cardW = Math.Min(210, (w - (sideMargin * 2) - (10 * (n - 1))) / n);
+            int cardH = 110, baseY = box.Bottom + 30;
             const float hoverLift = 16f;
-            int startX = (w - ((spacing * (GameData.Arenas.Length - 1)) + cardW)) / 2;
+            int gap = n > 1 ? Math.Min(50, (w - (sideMargin * 2) - (cardW * n)) / (n - 1)) : 0;
+            int spacing = cardW + gap;
+            int startX = (int)((w - ((cardW * n) + (gap * (n - 1)))) / 2f);
 
-            for (int i = 0; i < GameData.Arenas.Length; i++)
+            for (int i = 0; i < n; i++)
             {
                 ArenaInfo arena = GameData.Arenas[i];
                 float near = Math.Max(0f, 1f - Math.Abs(i - arenaSlide));
@@ -199,7 +253,8 @@ namespace Gui
                 {
                     g.FillRectangle(nameBar, card.X + 2, card.Bottom - 32, card.Width - 4, 30);
                 }
-                g.DrawString(arena.Name, cardF, i == selectedArenaIndex ? Brushes.White : Brushes.Gray, card.X + 8, card.Bottom - 26);
+                DrawFit(g, arena.Name, "Impact", 11, FontStyle.Regular, i == selectedArenaIndex ? Color.White : Color.Gray,
+                        card.X + 8, card.Bottom - 26, card.Width - 16);
 
                 bool highlighted = near > 0.5f;
                 using (Pen border = new Pen(highlighted ? arena.RingNeon : Color.FromArgb(50, 50, 65), highlighted ? 4 : 2))
@@ -214,9 +269,7 @@ namespace Gui
                 g.DrawRectangle(frame, frameX - 8, baseY - hoverLift - 8, cardW + 16, cardH + 16);
             }
 
-            const string prompt = "[ ARROWS ] Choose Stage  |  [ ENTER ] START MATCH  |  [ BACKSPACE ] Back";
-            SizeF promptSize = g.MeasureString(prompt, promptF);
-            g.DrawString(prompt, promptF, Brushes.Gold, (w - promptSize.Width) / 2f, h - 48);
+            DrawFit(g, "[ ARROWS ] Choose Stage  |  [ ENTER ] START MATCH  |  [ BACKSPACE ] Back", "Segoe UI", 12, FontStyle.Bold, Color.Gold, cx, h - 48, w - 60, true);
         }
     }
 }

@@ -17,9 +17,13 @@ namespace Gui
         private const float SpriteScale = 3f;            // each sprite pixel becomes 3x3 screen pixels
         private const float SpriteFootOffset = 184f;     // feet sit this far below the fighter's y (same as the old shape fighters)
 
+        // Tinatayang taas ng nakikitang katawan ng sprite (mula paa hanggang ulo), sa screen pixels.
+        // Dito nakabase ang pwesto ng name tag. Kung mataas pa/mababa ang tag sa ulo, baguhin ito.
+        private const float SpriteVisibleHeight = 110f;
+
         // Shows a message when the game starts, saying whether the sprite picture was found.
-        // Set to false once your character shows up in the game.
-        private const bool ShowSpriteCheck = true;
+        // Naka-false na dahil gumagana na ang sprites. Gawing true ulit kung kailangan mag-check.
+        private const bool ShowSpriteCheck = false;
 
         protected override void OnShown(EventArgs e)
         {
@@ -42,8 +46,55 @@ namespace Gui
         // Called once per game tick (see EngineLoop_Tick in Form1.cs)
         private void UpdateFighterSprites()
         {
-            p1Sprite.SyncFromGame(p1X, p1VelX, p1VelY, p1Y >= GroundLevel, p1Action, p1ActionTimer, false);
-            p2Sprite.SyncFromGame(p2X, p2VelX, p2VelY, p2Y >= GroundLevel, p2Action, p2ActionTimer, true);
+            // GINAMIT ANG p1FacingRight AT p2FacingRight PARA SA DYNAMIC BOTH-SIDE FACING LOGIC
+            p1Sprite.SyncFromGame(p1X, p1VelX, p1VelY, p1Y >= GroundLevel, p1Action, p1ActionTimer, p1FacingRight);
+            p2Sprite.SyncFromGame(p2X, p2VelX, p2VelY, p2Y >= GroundLevel, p2Action, p2ActionTimer, p2FacingRight);
+        }
+
+        // Tamang text ng name tag base sa TUNAY na player (hindi sa direksyon ng pagharap)
+        private string GetFighterTag(FighterInfo fighter, Player? sprite)
+        {
+            if (sprite != null && ReferenceEquals(sprite, p2Sprite) && isVsCPU) return "CPU: " + fighter.Name;
+            return fighter.Name;
+        }
+
+        // Kulay ng tag: P1 = cyan, P2/CPU = pula-orange (kapareho ng HUD), preview = puti
+        private Color GetFighterTagColor(Player? sprite)
+        {
+            if (sprite == null) return Color.White;
+            return ReferenceEquals(sprite, p1Sprite) ? Color.Cyan : Color.OrangeRed;
+        }
+
+        // Nagdo-draw ng name tag na nakagitna sa ulo. Kapag magkadikit ang dalawang fighter,
+        // lumalayo ang tag ng isa't isa para hindi magsapawan.
+        private void DrawFighterNameTag(Graphics g, string tag, Color color, float centerX, float tagY, Player? sprite)
+        {
+            using (Font nameFont = new Font("Impact", 11, FontStyle.Italic))
+            {
+                StringFormat fmt = StringFormat.GenericTypographic;
+                float tw = g.MeasureString(tag, nameFont, int.MaxValue, fmt).Width;
+
+                float drawCenter = centerX;
+                if (sprite != null)
+                {
+                    float otherCenter = ReferenceEquals(sprite, p1Sprite) ? p2X + 54f : p1X + 54f;
+                    float dx = centerX - otherCenter;
+                    float needed = tw + 12f;                       // layo na kailangan ng dalawang tag
+                    if (Math.Abs(dx) < needed)
+                    {
+                        float dir = dx >= 0f ? 1f : -1f;
+                        drawCenter += dir * ((needed - Math.Abs(dx)) / 2f);   // tulakan palayo
+                    }
+                }
+
+                float tx = drawCenter - (tw / 2f);
+                using (SolidBrush shadow = new SolidBrush(Color.FromArgb(200, 0, 0, 0)))
+                using (SolidBrush main = new SolidBrush(color))
+                {
+                    g.DrawString(tag, nameFont, shadow, tx + 1.5f, tagY + 1.5f, fmt);
+                    g.DrawString(tag, nameFont, main, tx, tagY, fmt);
+                }
+            }
         }
 
         // Replaces the shape-drawn fighter whenever the sprite picture is available.
@@ -84,11 +135,9 @@ namespace Gui
             bool hurt = sprite?.Hurt ?? false;
             FighterSprites.Draw(g, Array.IndexOf(GameData.Roster, fighter), animation, frame, centerX, footY, SpriteScale, faceRight, hurt, sprite?.CurrentAge ?? AgeStage.Youth);
 
-            using (Font nameFont = new Font("Impact", 11, FontStyle.Italic))
-            {
-                string tag = (!faceRight && isVsCPU) ? "CPU: " + fighter.Name : fighter.Name;
-                g.DrawString(tag, nameFont, Brushes.White, x + 5, footY - (FighterSprites.CellH * SpriteScale) - 22f);
-            }
+            // Name tag: nakagitna sa ulo ng fighter, tamang P1 / CPU label
+            float tagY = footY - SpriteVisibleHeight - 20f;
+            DrawFighterNameTag(g, GetFighterTag(fighter, sprite), GetFighterTagColor(sprite), centerX, tagY, sprite);
         }
     }
 }

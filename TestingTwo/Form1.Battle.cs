@@ -8,26 +8,72 @@ namespace Gui
 {
     public partial class Form1 : Form
     {
+        // ====== ROUND SYSTEM (Tekken style: best of 3) ======
+        // PAALALA: yung currentRound, p1RoundsWon, p2RoundsWon, matchResultText, introCounter
+        // ay nasa kabilang file mo na (ginagamit na sa lumang code), kaya hindi ko na dineclare dito.
+        // Kung wala pa pala, idagdag mo sa main Form1 file:
+        //   private int currentRound = 1; private int p1RoundsWon, p2RoundsWon;
+        private const int RoundsToWin = 2;
+
+        private int p1MaxHealth, p2MaxHealth;
+        private int koCounter;              // delay bago next round / results
+        private bool matchOver;
+        private string roundBannerText = "";
+
+        // Tawagin ito sa menu kapag magsisimula ng BAGONG laban
         private void StartMatch()
         {
             if (isVsCPU) p2Loadout = BuildCpuLoadout();
 
+            currentRound = 1;
+            p1RoundsWon = 0;
+            p2RoundsWon = 0;
+            p1AgeState = 0;
+            p2AgeState = 0;
+            matchOver = false;
+            matchResultText = "";
+
+            StartRound();
+        }
+
+        // Tinatawag tuwing simula ng bawat round
+        private void StartRound()
+        {
             p1Loadout.ResetMatchState();
             p2Loadout.ResetMatchState();
 
-            p1Health = p1RedHealth = MaxHealth + GameData.SkinCatalog[p1Loadout.SkinIndex].HealthModifier;
-            p2Health = p2RedHealth = MaxHealth + GameData.SkinCatalog[p2Loadout.SkinIndex].HealthModifier;
+            p1MaxHealth = GetAgeMaxHP(p1AgeState) + GameData.SkinCatalog[p1Loadout.SkinIndex].HealthModifier;
+            p2MaxHealth = GetAgeMaxHP(p2AgeState) + GameData.SkinCatalog[p2Loadout.SkinIndex].HealthModifier;
+
+            p1Health = p1RedHealth = p1MaxHealth;
+            p2Health = p2RedHealth = p2MaxHealth;
             p1Heat = 50; p2Heat = 50;
+
+            p1SkillCooldown = 0;
+            p2SkillCooldown = 0;
+            p1HasShield = false;
+            p2HasShield = false;
+            p1ShieldTimer = 0;
+            p2ShieldTimer = 0;
+            activeProjectiles.Clear();
+            damagePopups.Clear();
 
             p1X = 260; p2X = 660;
             p1Y = GroundLevel; p2Y = GroundLevel;
             p1VelX = 0; p2VelX = 0;
             p1VelY = 0; p2VelY = 0;
             p1Action = 0; p2Action = 0;
+            p1ActionTimer = 0; p2ActionTimer = 0;
             p1ComboHits = 0; p2ComboHits = 0;
+            p1ComboTimer = 0; p2ComboTimer = 0;
+
+            p1FacingRight = true;
+            p2FacingRight = false;
 
             roundTimer = 60;
-            introCounter = 60;
+            introCounter = 90;          // ~1.5 sec: "ROUND X" tapos "FIGHT!"
+            roundBannerText = "";
+            koCounter = 0;
 
             craters.Clear();
             shockwaves.Clear();
@@ -37,20 +83,98 @@ namespace Gui
 
             currentState = GameState.FightIntro;
             Sfx.Play(880, 200);
+
+            string p1Title = p1AgeState == 0 ? "YOUTH" : (p1AgeState == 1 ? "VETERAN" : "ELDER");
+            string p2Title = p2AgeState == 0 ? "YOUTH" : (p2AgeState == 1 ? "VETERAN" : "ELDER");
+            AddDamagePopup(p1X, p1Y - 50, $"P1: {p1Title}", Color.Cyan);
+            AddDamagePopup(p2X, p2Y - 50, $"P2: {p2Title}", Color.Crimson);
+        }
+
+        private string GetRoundTitle()
+        {
+            // Tekken style: kapag parehong isang panalo na, FINAL ROUND
+            bool final = (p1RoundsWon == RoundsToWin - 1 && p2RoundsWon == RoundsToWin - 1);
+            return final ? "FINAL ROUND" : $"ROUND {currentRound}";
+        }
+
+        private void EndRound()
+        {
+            if (p1Health <= 0) { p1Action = 99; p1ActionTimer = 60; }
+            if (p2Health <= 0) { p2Action = 99; p2ActionTimer = 60; }
+
+            bool knockedOut = p1Health <= 0 || p2Health <= 0;
+            roundBannerText = knockedOut ? "K.O.!" : "TIME UP";
+
+            currentState = GameState.KO;
+            Sfx.Play(150, 450);
+
+            string p1Name = GameData.Roster[p1CharIndex].Name;
+            string p2Name = isVsCPU ? "CPU" : GameData.Roster[p2CharIndex].Name;
+
+            if (p1Health > p2Health)
+            {
+                p1RoundsWon++;
+                p2AgeState = Math.Min(2, p2AgeState + 1);
+                matchResultText = $"{p1Name} WINS ROUND {currentRound}!";
+            }
+            else if (p2Health > p1Health)
+            {
+                p2RoundsWon++;
+                p1AgeState = Math.Min(2, p1AgeState + 1);
+                matchResultText = $"{p2Name} WINS ROUND {currentRound}!";
+            }
+            else
+            {
+                // Draw: parehong may puntos (parang Tekken)
+                p1RoundsWon++;
+                p2RoundsWon++;
+                p1AgeState = Math.Min(2, p1AgeState + 1);
+                p2AgeState = Math.Min(2, p2AgeState + 1);
+                matchResultText = "DRAW!";
+            }
+
+            bool p1Done = p1RoundsWon >= RoundsToWin;
+            bool p2Done = p2RoundsWon >= RoundsToWin;
+
+            // Tapos na ang match kung may nakaabot sa 2 at hindi tabla
+            if ((p1Done || p2Done) && p1RoundsWon != p2RoundsWon)
+            {
+                matchOver = true;
+                matchResultText = p1RoundsWon > p2RoundsWon
+                    ? $"{p1Name} MATCH WINNER!"
+                    : $"{p2Name} MATCH WINNER!";
+                AwardMatchGold();
+            }
+
+            koCounter = 150;      // ~2.5 sec bago next round / results
+        }
+
+        // Tawagin ito sa game loop kapag currentState == GameState.KO
+        private void UpdateKO()
+        {
+            if (koCounter > 0) { koCounter--; return; }
+
+            if (matchOver)
+                currentState = GameState.MatchResult;   // palitan kung iba ang pangalan ng results/menu state mo
+            else
+            {
+                currentRound++;   // next round (kasama ang extra round kung tabla pareho sa 2)
+                StartRound();
+            }
         }
 
         private void AwardMatchGold()
         {
             int p1Reward, p2Reward;
 
-            if (p1Health == p2Health) p1Reward = p2Reward = GameConfig.DrawReward;
-            else if (p1Health > p2Health) { p1Reward = GameConfig.WinReward; p2Reward = GameConfig.LoseReward; }
+            if (p1RoundsWon == p2RoundsWon) p1Reward = p2Reward = GameConfig.DrawReward;
+            else if (p1RoundsWon > p2RoundsWon) { p1Reward = GameConfig.WinReward; p2Reward = GameConfig.LoseReward; }
             else { p1Reward = GameConfig.LoseReward; p2Reward = GameConfig.WinReward; }
 
             p1Loadout.Gold += p1Reward;
             if (isVsCPU)
             {
-                rewardText = $"P1 earned +{p1Reward} gold  (total: {p1Loadout.Gold})";
+                rewardText = $"P1 earned +{p1Reward} gold   (total: {p1Loadout.Gold})";
             }
             else
             {
@@ -59,9 +183,88 @@ namespace Gui
             }
         }
 
+        // ====== HUD: timer, round pips (score) sa taas, at banner ======
+        // Tawagin sa OnPaint / draw function mo, pagkatapos ma-draw ang health bars
+        private void DrawRoundHUD(Graphics g)
+        {
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            int cx = this.ClientSize.Width / 2;
+
+            // Timer sa gitna
+            using (var timerFont = new Font("Arial", 28, FontStyle.Bold))
+            using (var sf = new StringFormat { Alignment = StringAlignment.Center })
+            {
+                g.DrawString(Math.Max(0, roundTimer).ToString(), timerFont, Brushes.White, cx, 12, sf);
+            }
+
+            // Round pips (score): P1 sa kaliwa ng timer, P2 sa kanan
+            for (int i = 0; i < RoundsToWin; i++)
+            {
+                DrawPip(g, cx - 55 - i * 26, 62, i < p1RoundsWon, Color.Cyan);
+                DrawPip(g, cx + 55 + i * 26, 62, i < p2RoundsWon, Color.Crimson);
+            }
+
+            // Banner sa gitna ng screen
+            string banner = null;
+            if (currentState == GameState.FightIntro)
+                banner = introCounter > 35 ? GetRoundTitle() : "FIGHT!";
+            else if (currentState == GameState.KO)
+                banner = roundBannerText;
+
+            if (banner != null)
+            {
+                DrawCenteredText(g, banner, 72, this.ClientSize.Height / 2 - 90,
+                                 banner == "FIGHT!" ? Color.OrangeRed : Color.Gold);
+
+                if (currentState == GameState.KO && koCounter < 110)
+                    DrawCenteredText(g, matchResultText, 30, this.ClientSize.Height / 2 + 10, Color.White);
+            }
+        }
+
+        // Pips lang (walang timer), para hindi mag-doble sa DrawModernHUD.
+        // Nasa ILALIM ng timer, sa gitna mismo, para hindi tumama sa health bars.
+        // Kung kailangan pang ibaba/itaas, baguhin lang ang pipY.
+        private void DrawRoundPips(Graphics g)
+        {
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            int cx = this.ClientSize.Width / 2;
+            int pipY = 100;
+
+            for (int i = 0; i < RoundsToWin; i++)
+            {
+                DrawPip(g, cx - 16 - i * 22, pipY, i < p1RoundsWon, Color.Cyan);
+                DrawPip(g, cx + 16 + i * 22, pipY, i < p2RoundsWon, Color.Crimson);
+            }
+        }
+
+        private void DrawPip(Graphics g, int x, int y, bool won, Color color)
+        {
+            var rect = new Rectangle(x - 8, y - 8, 16, 16);
+            if (won)
+            {
+                using (var b = new SolidBrush(color)) g.FillEllipse(b, rect);
+            }
+            using (var p = new Pen(Color.White, 2)) g.DrawEllipse(p, rect);
+        }
+
+        private void DrawCenteredText(Graphics g, string text, float size, int y, Color color)
+        {
+            using (var font = new Font("Impact", size, FontStyle.Bold))
+            using (var sf = new StringFormat { Alignment = StringAlignment.Center })
+            {
+                float cx = this.ClientSize.Width / 2f;
+                g.DrawString(text, font, Brushes.Black, cx + 3, y + 3, sf); // shadow
+                using (var b = new SolidBrush(color))
+                    g.DrawString(text, font, b, cx, y, sf);
+            }
+        }
+
+        // ====== CPU AI ======
         private void UpdateCPUAI()
         {
             if (p2Action == 4 || p2Action == 5) return;
+
+            p2FacingRight = (p1X > p2X);
 
             cpuDecisionTimer--;
             if (cpuDecisionTimer <= 0)
@@ -69,12 +272,12 @@ namespace Gui
                 cpuDecisionTimer = rng.Next(8, 18);
                 float dist = p2X - p1X;
 
-                if (dist > 180)
+                if (Math.Abs(dist) > 180)
                 {
-                    p2VelX = -13 * SpeedFactor(2);
+                    p2VelX = (p1X > p2X) ? 13 * SpeedFactor(2) : -13 * SpeedFactor(2);
                     if (rng.Next(0, 10) == 0 && p2Y >= GroundLevel) p2VelY = -22;
                 }
-                else if (dist <= 180 && dist >= 0)
+                else
                 {
                     int moveChoice = rng.Next(0, 10);
                     SkillInfo finisher = GameData.SkillCatalog[p2Loadout.SkillSlots[2]];
@@ -82,25 +285,59 @@ namespace Gui
                     if (p2Heat >= finisher.HeatCost && moveChoice < 3) ExecuteAttack(2, 2);
                     else if (moveChoice < 6) ExecuteAttack(2, 1);
                     else if (moveChoice < 9) ExecuteAttack(2, 0);
-                    else p2VelX = 10 * SpeedFactor(2);
-                }
-                else
-                {
-                    p2VelX = 10 * SpeedFactor(2);
+                    else p2VelX = (p1X > p2X) ? 10 * SpeedFactor(2) : -10 * SpeedFactor(2);
                 }
             }
         }
 
+        // ====== PHYSICS ======
         private void UpdateBattlePhysics()
         {
             if (p1RedHealth > p1Health) p1RedHealth--;
             if (p2RedHealth > p2Health) p2RedHealth--;
 
+            if (p1SkillCooldown > 0) p1SkillCooldown--;
+            if (p2SkillCooldown > 0) p2SkillCooldown--;
+
+            float nextP1X = p1X + p1VelX;
+            float nextP2X = p2X + p2VelX;
+            float minDistance = 70f;
+
+            if (p1Y >= GroundLevel && p2Y >= GroundLevel)
+            {
+                if (p1X < p2X)
+                {
+                    if (nextP1X > p2X - minDistance && p1VelX > 0)
+                    {
+                        p1X = p2X - minDistance;
+                        p1VelX = 0;
+                    }
+                    if (nextP2X < p1X + minDistance && p2VelX < 0)
+                    {
+                        p2X = p1X + minDistance;
+                        p2VelX = 0;
+                    }
+                }
+                else
+                {
+                    if (nextP1X < p2X + minDistance && p1VelX < 0)
+                    {
+                        p1X = p2X + minDistance;
+                        p1VelX = 0;
+                    }
+                    if (nextP2X > p1X - minDistance && p2VelX > 0)
+                    {
+                        p2X = p1X - minDistance;
+                        p2VelX = 0;
+                    }
+                }
+            }
+
             p1X += p1VelX; p1VelX *= 0.82f;
             p2X += p2VelX; p2VelX *= 0.82f;
 
-            if (Math.Abs(p1VelX) > 6 || p1Action == 3) trails.Add(new GhostTrail { X = p1X, Y = p1Y, Color = GameData.Roster[p1CharIndex].AuraColor, Alpha = 140, Animation = p1Sprite.CurrentAnimation, Frame = p1Sprite.Frame, FaceRight = true, Age = p1Sprite.CurrentAge });
-            if (Math.Abs(p2VelX) > 6 || p2Action == 3) trails.Add(new GhostTrail { X = p2X, Y = p2Y, Color = GameData.Roster[p2CharIndex].AuraColor, Alpha = 140, Animation = p2Sprite.CurrentAnimation, Frame = p2Sprite.Frame, FaceRight = false, Age = p2Sprite.CurrentAge });
+            if (Math.Abs(p1VelX) > 6 || p1Action == 3) trails.Add(new GhostTrail { X = p1X, Y = p1Y, Color = GameData.Roster[p1CharIndex].AuraColor, Alpha = 140, Animation = p1Sprite.CurrentAnimation, Frame = p1Sprite.Frame, FaceRight = p1FacingRight, Age = p1Sprite.CurrentAge });
+            if (Math.Abs(p2VelX) > 6 || p2Action == 3) trails.Add(new GhostTrail { X = p2X, Y = p2Y, Color = GameData.Roster[p2CharIndex].AuraColor, Alpha = 140, Animation = p2Sprite.CurrentAnimation, Frame = p2Sprite.Frame, FaceRight = p2FacingRight, Age = p2Sprite.CurrentAge });
 
             p1Y += p1VelY;
             if (p1Y < GroundLevel) p1VelY += Gravity;
@@ -160,20 +397,13 @@ namespace Gui
 
             if (screenShake > 0) screenShake--;
 
-            // Camera Following has been removed. Forced static camera zoom.
             cameraZoom = 1.0f;
             targetZoom = 1.0f;
 
-            if (p1Health <= 0 || p2Health <= 0 || roundTimer <= 0)
+            // Guard: huwag ulit-ulitin ang EndRound kapag KO state na
+            if (currentState != GameState.KO && (p1Health <= 0 || p2Health <= 0 || roundTimer <= 0))
             {
-                if (p1Health <= 0) { p1Action = 99; p1ActionTimer = 60; }
-                if (p2Health <= 0) { p2Action = 99; p2ActionTimer = 60; }
-
-                currentState = GameState.KO;
-                Sfx.Play(150, 450);
-                AwardMatchGold();
-                if (p1Health == p2Health) matchResultText = "DOUBLE K.O. / DRAW";
-                else matchResultText = p1Health > p2Health ? $"{GameData.Roster[p1CharIndex].Name} WINS!" : $"{(isVsCPU ? "CPU (" + GameData.Roster[p2CharIndex].Name + ")" : GameData.Roster[p2CharIndex].Name)} WINS!";
+                EndRound();
             }
         }
 
@@ -203,7 +433,8 @@ namespace Gui
 
         private float SpeedFactor(int player)
         {
-            return CombatRules.DashSpeed(GetLoadout(player));
+            int age = (player == 1) ? p1AgeState : p2AgeState;
+            return CombatRules.DashSpeed(GetLoadout(player)) * GetAgeSpeedMultiplier(age);
         }
 
         private int GetHeatGain(int player)
@@ -225,7 +456,7 @@ namespace Gui
         {
             bool isP1 = attacker == 1;
             int defender = isP1 ? 2 : 1;
-            float dir = isP1 ? 1f : -1f;
+            float dir = isP1 ? (p1FacingRight ? 1f : -1f) : (p2FacingRight ? 1f : -1f);
 
             Loadout atkLoadout = isP1 ? p1Loadout : p2Loadout;
             FighterInfo atkFighter = isP1 ? GameData.Roster[p1CharIndex] : GameData.Roster[p2CharIndex];
@@ -266,14 +497,21 @@ namespace Gui
             atkActionTimer = skill.ActionFrames;
             atkVelX += dir * skill.Lunge * SpeedFactor(attacker);
 
-            bool inRange = Math.Abs(p1X - p2X) <= skill.Reach && Math.Abs(p1Y - p2Y) < 100;
+            bool isFacingEnemy = isP1 ? (p1X <= p2X ? p1FacingRight : !p1FacingRight)
+                                      : (p2X <= p1X ? p2FacingRight : !p2FacingRight);
+
+            bool inRange = isFacingEnemy && Math.Abs(p1X - p2X) <= skill.Reach && Math.Abs(p1Y - p2Y) < 100;
             if (!inRange)
             {
                 Sfx.Play(280, 50);
                 return;
             }
 
-            int damage = skill.Damage;
+            int atkAge = isP1 ? p1AgeState : p2AgeState;
+            int defAge = isP1 ? p2AgeState : p1AgeState;
+
+            int damage = (int)(skill.Damage * GetAgeDamageMultiplier(atkAge));
+
             if (isHeavy && atkLoadout.ComboCharge > 0)
             {
                 damage += atkLoadout.ComboCharge * GameConfig.ComboChargeBonusDamage;
@@ -281,8 +519,17 @@ namespace Gui
             }
 
             defHealth = Math.Max(0, defHealth - ComputeDamageTaken(defender, damage));
-            defAction = 4;
-            defActionTimer = skill.StunFrames;
+
+            if (defAge == 2)
+            {
+                AddDamagePopup(defX, defY - 30, "HYPER ARMOR!", Color.Gold);
+            }
+            else
+            {
+                defAction = 4;
+                defActionTimer = skill.StunFrames;
+            }
+
             defVelX = dir * skill.Knockback;
             if (skill.Launch < 0) defVelY = skill.Launch;
             defHeat = Math.Max(0, defHeat - skill.HeatDrain);
@@ -308,6 +555,7 @@ namespace Gui
             Sfx.Play(isHeavy ? 980 : (skill.Action == 2 ? 650 : 500), 100);
         }
 
+        // ====== VISUAL EFFECTS ======
         private void SpawnShockwave(PointF center, float maxR, Color c)
         {
             shockwaves.Add(new ShockwaveRing { Center = center, Radius = 15, MaxRadius = maxR, Color = c, Alpha = 220 });
