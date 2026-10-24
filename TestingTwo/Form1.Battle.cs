@@ -6,9 +6,6 @@ using System.Windows.Forms;
 
 namespace Gui
 {
-    /// <summary>
-    /// Match flow, CPU AI, physics, attacks, and visual effect spawning.
-    /// </summary>
     public partial class Form1 : Form
     {
         private void StartMatch()
@@ -102,8 +99,8 @@ namespace Gui
             p1X += p1VelX; p1VelX *= 0.82f;
             p2X += p2VelX; p2VelX *= 0.82f;
 
-            if (Math.Abs(p1VelX) > 6 || p1Action == 3) trails.Add(new GhostTrail { X = p1X, Y = p1Y, Color = GameData.Roster[p1CharIndex].AuraColor, Alpha = 140 });
-            if (Math.Abs(p2VelX) > 6 || p2Action == 3) trails.Add(new GhostTrail { X = p2X, Y = p2Y, Color = GameData.Roster[p2CharIndex].AuraColor, Alpha = 140 });
+            if (Math.Abs(p1VelX) > 6 || p1Action == 3) trails.Add(new GhostTrail { X = p1X, Y = p1Y, Color = GameData.Roster[p1CharIndex].AuraColor, Alpha = 140, Animation = p1Sprite.CurrentAnimation, Frame = p1Sprite.Frame, FaceRight = true, Age = p1Sprite.CurrentAge });
+            if (Math.Abs(p2VelX) > 6 || p2Action == 3) trails.Add(new GhostTrail { X = p2X, Y = p2Y, Color = GameData.Roster[p2CharIndex].AuraColor, Alpha = 140, Animation = p2Sprite.CurrentAnimation, Frame = p2Sprite.Frame, FaceRight = false, Age = p2Sprite.CurrentAge });
 
             p1Y += p1VelY;
             if (p1Y < GroundLevel) p1VelY += Gravity;
@@ -163,13 +160,15 @@ namespace Gui
 
             if (screenShake > 0) screenShake--;
 
-            float dist = Math.Abs(p1X - p2X);
-            float baseZoom = Math.Max(0.85f, Math.Min(1.15f, 1.10f - (dist / 1300f)));
-            targetZoom = (speedLineTimer > 0) ? 1.35f : baseZoom;
-            cameraZoom += (targetZoom - cameraZoom) * 0.15f;
+            // Camera Following has been removed. Forced static camera zoom.
+            cameraZoom = 1.0f;
+            targetZoom = 1.0f;
 
             if (p1Health <= 0 || p2Health <= 0 || roundTimer <= 0)
             {
+                if (p1Health <= 0) { p1Action = 99; p1ActionTimer = 60; }
+                if (p2Health <= 0) { p2Action = 99; p2ActionTimer = 60; }
+
                 currentState = GameState.KO;
                 Sfx.Play(150, 450);
                 AwardMatchGold();
@@ -197,7 +196,6 @@ namespace Gui
             }
         }
 
-        // Shortcuts that look up the right player's loadout, then use CombatRules.
         private Loadout GetLoadout(int player)
         {
             return player == 1 ? p1Loadout : p2Loadout;
@@ -275,7 +273,6 @@ namespace Gui
                 return;
             }
 
-            // Combo Charge is spent on Finishers for bonus damage.
             int damage = skill.Damage;
             if (isHeavy && atkLoadout.ComboCharge > 0)
             {

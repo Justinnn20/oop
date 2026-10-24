@@ -9,6 +9,9 @@ namespace Gui
     /// <summary>
     /// Main game window: shared game state, setup, and the engine loop. The rest of Form1 lives in the Form1.*.cs files.
     /// </summary>
+    // Tells Visual Studio that every Form1.*.cs file is plain code, so double-clicking one opens
+    // the code editor and no Design view (which creates the extra .resx / .Designer.cs files).
+    [System.ComponentModel.DesignerCategory("Code")]
     public partial class Form1 : Form
     {
         // --- GAME FLOW ---
@@ -89,7 +92,7 @@ namespace Gui
             InitializeComponent();
 
             this.Text = "Clash Arena";
-            this.ClientSize = new Size(1024, 620);
+            InitArcadeUi();   // sizes the window and builds the arcade cabinet (see Form1.ArcadeUi.cs)
             this.DoubleBuffered = true;
             this.FormBorderStyle = FormBorderStyle.FixedSingle;
             this.MaximizeBox = false;
@@ -154,6 +157,7 @@ namespace Gui
             }
 
             UpdateVisualEffects();
+            UpdateFighterSprites();   // keep the sprite animations in step with the game (see Form1.Sprites.cs)
             this.Invalidate();
         }
     }

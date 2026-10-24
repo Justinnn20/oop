@@ -6,9 +6,6 @@ using System.Windows.Forms;
 
 namespace Gui
 {
-    /// <summary>
-    /// Mode, character, and arena selection screens.
-    /// </summary>
     public partial class Form1 : Form
     {
         private void DrawModeSelection(Graphics g)
@@ -108,7 +105,6 @@ namespace Gui
             Sfx.Play(520, 40);
         }
 
-        // Renders a miniature of the real battle scenery inside the preview box.
         private void DrawArenaPreview(Graphics g, int arenaIndex, Rectangle box, float offsetX)
         {
             GraphicsState state = g.Save();
@@ -123,7 +119,7 @@ namespace Gui
             ArenaInfo arena = GameData.Arenas[arenaIndex];
             foreach (var m in ambientMotes)
             {
-                if (arena.BackgroundFile != null) break;   // maps with a picture have no floating particles
+                if (arena.BackgroundFile != null) break;
                 using (SolidBrush mote = new SolidBrush(Color.FromArgb(m.Alpha, arena.ParticleColor)))
                 {
                     g.FillEllipse(mote, m.X, m.Y, m.Size, m.Size);
@@ -150,7 +146,6 @@ namespace Gui
 
             ArenaInfo current = GameData.Arenas[selectedArenaIndex];
 
-            // ---- Preview box (the new map slides in, the old one slides out)
             Rectangle box = new Rectangle((w - 520) / 2, 64, 520, 315);
             int glowAlpha = 130;
             using (Pen glow = new Pen(Color.FromArgb(glowAlpha, current.RingNeon), 10))
@@ -182,9 +177,8 @@ namespace Gui
                 g.DrawRectangle(boxBorder, box);
             }
 
-            // ---- Map cards
-            int cardW = 170, cardH = 108, spacing = 190, baseY = 410;
-            const float hoverLift = 16f;   // how far the selected card rises (a steady lift, no bobbing)
+            int cardW = 210, cardH = 110, spacing = 260, baseY = 410;
+            const float hoverLift = 16f;
             int startX = (w - ((spacing * (GameData.Arenas.Length - 1)) + cardW)) / 2;
 
             for (int i = 0; i < GameData.Arenas.Length; i++)
@@ -193,30 +187,14 @@ namespace Gui
                 float near = Math.Max(0f, 1f - Math.Abs(i - arenaSlide));
                 RectangleF card = new RectangleF(startX + (i * spacing), baseY - (near * hoverLift), cardW, cardH);
 
-                // Mini map art: sky, floor, neon ring line
-                RectangleF skyRect = new RectangleF(card.X + 2, card.Y + 2, card.Width - 4, (card.Height - 32) * 0.6f);
-                RectangleF floorRect = new RectangleF(card.X + 2, skyRect.Bottom, card.Width - 4, card.Bottom - 32 - skyRect.Bottom);
                 Bitmap? thumb = ArenaImages.Get(arena);
                 if (thumb != null)
                 {
-                    // Maps with a background picture show a cut-out of it
                     RectangleF art = new RectangleF(card.X + 2, card.Y + 2, card.Width - 4, card.Height - 34);
                     float srcH = 1024f * art.Height / art.Width;
                     g.DrawImage(thumb, art, new RectangleF(0, 150, 1024, srcH), GraphicsUnit.Pixel);
                 }
-                else
-                {
-                    using (LinearGradientBrush sky = new LinearGradientBrush(skyRect, arena.SkyTop, arena.SkyBottom, LinearGradientMode.Vertical))
-                    using (SolidBrush floor = new SolidBrush(arena.FloorColor))
-                    using (Pen neonLine = new Pen(arena.RingNeon, 2))
-                    {
-                        g.FillRectangle(sky, skyRect);
-                        g.FillRectangle(floor, floorRect);
-                        g.DrawLine(neonLine, skyRect.X, skyRect.Bottom, skyRect.Right, skyRect.Bottom);
-                    }
-                }
 
-                // Name bar
                 using (SolidBrush nameBar = new SolidBrush(Color.Black))
                 {
                     g.FillRectangle(nameBar, card.X + 2, card.Bottom - 32, card.Width - 4, 30);
@@ -230,14 +208,13 @@ namespace Gui
                 }
             }
 
-            // ---- Selector frame slides from card to card
             float frameX = startX + (arenaSlide * spacing);
             using (Pen frame = new Pen(current.RingNeon, 3))
             {
                 g.DrawRectangle(frame, frameX - 8, baseY - hoverLift - 8, cardW + 16, cardH + 16);
             }
 
-            const string prompt = "[ ARROWS ] Choose Stage  |  [ ENTER ] OPEN ARMORY  |  [ BACKSPACE ] Back";
+            const string prompt = "[ ARROWS ] Choose Stage  |  [ ENTER ] START MATCH  |  [ BACKSPACE ] Back";
             SizeF promptSize = g.MeasureString(prompt, promptF);
             g.DrawString(prompt, promptF, Brushes.Gold, (w - promptSize.Width) / 2f, h - 48);
         }

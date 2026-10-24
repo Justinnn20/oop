@@ -13,4 +13,8 @@
     <EmbeddedResource Include="**\elevator_lobby.png" Exclude="bin\**;obj\**" LogicalName="elevator_lobby.png" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Form1.Battle.resx" />
+  </ItemGroup>
+
 </Project>

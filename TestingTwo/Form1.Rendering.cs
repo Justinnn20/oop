@@ -11,10 +11,8 @@ namespace Gui
     /// </summary>
     public partial class Form1 : Form
     {
-        protected override void OnPaint(PaintEventArgs e)
+        private void RenderGame(Graphics g)
         {
-            base.OnPaint(e);
-            Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
             if (currentState == GameState.ModeSelect)
@@ -45,24 +43,18 @@ namespace Gui
                     }
                 }
 
-                float midX = (p1X + p2X) / 2f;
-                float midY = (p1Y + p2Y) / 2f + 50f;
-
-                // Maps with a background picture show it exactly as it is, fixed to the screen
+                // Stage image background fixed to viewport
                 Bitmap? stageBg = ArenaImages.Get(GameData.Arenas[selectedArenaIndex]);
                 if (stageBg != null) g.DrawImage(stageBg, 0, 0, w, h);
 
-                g.TranslateTransform(w / 2f, h / 2f);
-                g.ScaleTransform(cameraZoom, cameraZoom);
-                g.TranslateTransform(-midX, -midY);
-
+                // STATIC CAMERA: the world is drawn as-is, nothing follows the fighters.
+                // The only camera effect left is the small shake when a hit lands.
                 if (screenShake > 0)
                 {
                     g.TranslateTransform(rng.Next(-screenShake, screenShake + 1), rng.Next(-screenShake, screenShake + 1));
                 }
 
-                // Draw the full arena scenery for the selected stage (Volcano, Dojo, Cyber, Forest, or Elevator Lobby)
-                DrawDynamicArenaScenery(g, midX);
+                DrawDynamicArenaScenery(g, w / 2f);
 
                 foreach (var c in craters)
                 {
@@ -79,7 +71,7 @@ namespace Gui
                 var ar = GameData.Arenas[selectedArenaIndex];
                 foreach (var m in ambientMotes)
                 {
-                    if (ar.BackgroundFile != null) break;   // maps with a picture have no floating particles
+                    if (ar.BackgroundFile != null) break;
                     using (SolidBrush amb = new SolidBrush(Color.FromArgb(m.Alpha, ar.ParticleColor)))
                     {
                         g.FillEllipse(amb, m.X, m.Y, m.Size, m.Size);
@@ -88,18 +80,26 @@ namespace Gui
 
                 foreach (var t in trails)
                 {
-                    using (SolidBrush tb = new SolidBrush(Color.FromArgb(Math.Max(0, t.Alpha), t.Color)))
+                    if (FighterSprites.Available)
                     {
-                        g.FillEllipse(tb, t.X + 35, t.Y, 38, 44);
-                        g.FillRectangle(tb, t.X + 30, t.Y + 42, 48, 58);
+                        // After-image of the real sprite pose, in the fighter's aura color
+                        FighterSprites.DrawGhost(g, t.Animation, t.Frame, t.X + 54f, t.Y + SpriteFootOffset, SpriteScale, t.FaceRight, t.Color, t.Alpha, t.Age);
+                    }
+                    else
+                    {
+                        using (SolidBrush tb = new SolidBrush(Color.FromArgb(Math.Max(0, t.Alpha), t.Color)))
+                        {
+                            g.FillEllipse(tb, t.X + 35, t.Y, 38, 44);
+                            g.FillRectangle(tb, t.X + 30, t.Y + 42, 48, 58);
+                        }
                     }
                 }
 
                 DrawFighterReflection(g, p1X, p1Y, p1Action, true, GameData.Roster[p1CharIndex]);
                 DrawFighterReflection(g, p2X, p2Y, p2Action, false, GameData.Roster[p2CharIndex]);
 
-                DrawArticulatedFighter(g, p1X, p1Y, p1Action, true, GameData.Roster[p1CharIndex], p1Loadout);
-                DrawArticulatedFighter(g, p2X, p2Y, p2Action, false, GameData.Roster[p2CharIndex], p2Loadout);
+                DrawArticulatedFighter(g, p1X, p1Y, p1Action, true, GameData.Roster[p1CharIndex], p1Loadout, p1Sprite);
+                DrawArticulatedFighter(g, p2X, p2Y, p2Action, false, GameData.Roster[p2CharIndex], p2Loadout, p2Sprite);
 
                 foreach (var s in shockwaves)
                 {
@@ -167,14 +167,23 @@ namespace Gui
             }
         }
 
-        // Maps with a background picture: in battle the picture is drawn fixed to the screen (see OnPaint).
-        // The stage-select preview draws it here instead, filling the same 1024x620 view.
         private bool TryDrawImageScenery(Graphics g, ArenaInfo ar, bool isPreview)
         {
             Bitmap? bg = ArenaImages.Get(ar);
-            if (bg == null) return false;
+            if (bg != null)
+            {
+                if (isPreview) g.DrawImage(bg, 0, -20, 1024, 620);
+                return true;
+            }
 
-            if (isPreview) g.DrawImage(bg, 0, -20, 1024, 620);
+            // Fallback rendering if image file is missing
+            using (LinearGradientBrush sky = new LinearGradientBrush(new Rectangle(-400, -150, 1800, 520), ar.SkyTop, ar.SkyBottom, LinearGradientMode.Vertical))
+            {
+                g.FillRectangle(sky, -400, -150, 1800, 520);
+            }
+            Point[] octagon = { new Point(20, 360), new Point(1004, 360), new Point(1200, 720), new Point(-180, 720) };
+            using (SolidBrush floorB = new SolidBrush(ar.FloorColor)) g.FillPolygon(floorB, octagon);
+            using (Pen ringSolid = new Pen(ar.RingNeon, 4)) g.DrawLine(ringSolid, 20, 360, 1004, 360);
 
             return true;
         }
@@ -184,152 +193,18 @@ namespace Gui
             int arenaIdx = arenaIndex >= 0 ? arenaIndex : selectedArenaIndex;
             var ar = GameData.Arenas[arenaIdx];
 
-            // Maps with a background picture (like the Elevator Lobby) are drawn from that picture.
             if (ar.BackgroundFile != null && TryDrawImageScenery(g, ar, arenaIndex >= 0)) return;
-
-            int w = 1800;
-
-            // 1. SKY
-            using (LinearGradientBrush sky = new LinearGradientBrush(new Rectangle(-400, -150, w, 520), ar.SkyTop, ar.SkyBottom, LinearGradientMode.Vertical))
-            {
-                g.FillRectangle(sky, -400, -150, w, 520);
-            }
-
-            float px = (midX - 512) * 0.12f;
-
-            // 2. STAGE-SPECIFIC BACKGROUND ELEMENTS
-            if (arenaIdx == 0) // === VOLCANO INFERNO ===
-            {
-                // Towering volcano with smoke
-                PointF[] volcanoPeak = {
-                    new PointF(-300, 360),
-                    new PointF(-50 - px, 160),
-                    new PointF(20 - px, 190), // Crater top
-                    new PointF(120 - px, 150),
-                    new PointF(400 - px, 360),
-                    new PointF(650 - px, 130), // Main Caldera
-                    new PointF(720 - px, 155),
-                    new PointF(850 - px, 140),
-                    new PointF(1200, 360)
-                };
-                using (SolidBrush vRock = new SolidBrush(Color.FromArgb(40, 10, 10))) g.FillPolygon(vRock, volcanoPeak);
-
-                // Glowing lava in the crater
-                using (SolidBrush lavaGlow = new SolidBrush(Color.FromArgb(240, 255, 60, 0)))
-                {
-                    g.FillEllipse(lavaGlow, 650 - px, 135, 75, 25);
-                    g.FillEllipse(lavaGlow, -40 - px, 165, 60, 20);
-                }
-
-                // Lava river flowing along the back floor
-                using (Pen lavaRiver = new Pen(Color.FromArgb(220, 255, 80, 0), 8))
-                {
-                    g.DrawCurve(lavaRiver, new PointF[] {
-                        new PointF(-200, 360),
-                        new PointF(200, 355),
-                        new PointF(600, 365),
-                        new PointF(1200, 358)
-                    });
-                }
-            }
-            else if (arenaIdx == 1) // === MISHIMA DOJO ===
-            {
-                // Japanese Pagoda Roof Silhouette
-                float dox = 360 - px;
-                using (SolidBrush dojo = new SolidBrush(Color.FromArgb(30, 20, 15)))
-                {
-                    // Level 1 roof
-                    g.FillPolygon(dojo, new PointF[] { new PointF(dox - 160, 270), new PointF(dox + 160, 270), new PointF(dox + 110, 220), new PointF(dox - 110, 220) });
-                    // Level 2 roof
-                    g.FillPolygon(dojo, new PointF[] { new PointF(dox - 120, 220), new PointF(dox + 120, 220), new PointF(dox + 70, 170), new PointF(dox - 70, 170) });
-                    // Pagoda spire
-                    g.FillRectangle(dojo, dox - 8, 110, 16, 60);
-                }
-                // Red torii gates on both sides
-                using (Pen torii = new Pen(Color.Crimson, 7))
-                {
-                    g.DrawLine(torii, -50 - px, 240, 70 - px, 240);
-                    g.DrawLine(torii, -30 - px, 240, -30 - px, 360);
-                    g.DrawLine(torii, 50 - px, 240, 50 - px, 360);
-                }
-            }
-            else if (arenaIdx == 2) // === CYBER HIGHWAY ===
-            {
-                // Futuristic Skyscraper Skyline
-                for (int bx = -200; bx <= 1200; bx += 90)
-                {
-                    int bH = 140 + ((bx * 7) % 120);
-                    using (SolidBrush bldg = new SolidBrush(Color.FromArgb(15, 18, 30)))
-                    {
-                        g.FillRectangle(bldg, bx - px, 360 - bH, 75, bH);
-                    }
-                    // Glowing Windows
-                    using (SolidBrush winB = new SolidBrush(Color.FromArgb(90, Color.Cyan)))
-                    {
-                        for (int wy = 360 - bH + 15; wy < 340; wy += 22)
-                        {
-                            g.FillRectangle(winB, bx - px + 10, wy, 15, 8);
-                            g.FillRectangle(winB, bx - px + 45, wy, 15, 8);
-                        }
-                    }
-                }
-            }
-            else if (arenaIdx == 3) // === YAKUSHIMA FOREST ===
-            {
-                // Giant Full Moon
-                using (SolidBrush moon = new SolidBrush(Color.FromArgb(200, 230, 245, 220)))
-                {
-                    g.FillEllipse(moon, 450 - px, 70, 110, 110);
-                }
-                // Pine Trees Layer
-                for (int tx = -200; tx <= 1200; tx += 120)
-                {
-                    PointF[] tree = {
-                        new PointF(tx - px, 360),
-                        new PointF(tx + 40 - px, 180),
-                        new PointF(tx + 80 - px, 360)
-                    };
-                    using (SolidBrush pine = new SolidBrush(Color.FromArgb(12, 28, 20))) g.FillPolygon(pine, tree);
-                }
-            }
-
-            // 3. 3D OCTAGON RING FLOOR
-            Point[] octagon = {
-                new Point(20, 360),
-                new Point(1004, 360),
-                new Point(1200, 720),
-                new Point(-180, 720)
-            };
-            using (SolidBrush floorB = new SolidBrush(ar.FloorColor)) g.FillPolygon(floorB, octagon);
-
-            // Ring Boundary Line
-            using (Pen ringGlow = new Pen(Color.FromArgb(90, ar.RingNeon), 10)) g.DrawLine(ringGlow, 20, 360, 1004, 360);
-            using (Pen ringSolid = new Pen(ar.RingNeon, 4)) g.DrawLine(ringSolid, 20, 360, 1004, 360);
-
-            // Floor Details / Cracks / Tatami Lines
-            Color gridLineColor = (arenaIdx == 0) ? Color.FromArgb(90, 255, 80, 0) : Color.FromArgb(45, 255, 255, 255);
-            using (Pen gridPen = new Pen(gridLineColor, 2))
-            {
-                for (int x = -100; x <= 1120; x += 110)
-                {
-                    g.DrawLine(gridPen, 512 + ((x - 512) * 0.35f), 360, x, 720);
-                }
-                g.DrawLine(gridPen, -10, 440, 1034, 440);
-                g.DrawLine(gridPen, -90, 530, 1114, 530);
-                g.DrawLine(gridPen, -160, 630, 1184, 630);
-            }
-
-            // Splat Pillars
-            using (Pen wallSolid = new Pen(ar.RingNeon, 5))
-            {
-                g.DrawLine(wallSolid, 80, 140, 80, 500);
-                g.DrawLine(wallSolid, this.ClientSize.Width - 80, 140, this.ClientSize.Width - 80, 500);
-            }
         }
 
-        private void DrawArticulatedFighter(Graphics g, float x, float y, int action, bool faceRight, FighterInfo fighter, Loadout? loadout = null)
+        private void DrawArticulatedFighter(Graphics g, float x, float y, int action, bool faceRight, FighterInfo fighter, Loadout? loadout = null, Player? sprite = null)
         {
-            float bob = (y >= GroundLevel && action == 0) ? (float)Math.Sin(bounceCycle + (faceRight ? 0 : 1.5f)) * 5 : 0;
+            if (FighterSprites.Available)
+            {
+                DrawSpriteFighter(g, x, y, action, faceRight, fighter, loadout, sprite);
+                return;
+            }
+
+            float bob = 0f; // Disabled idle up-and-down floating motion
             float cy = y + bob;
 
             float shadowScale = Math.Max(0.4f, 1f - ((GroundLevel - y) / 250f));
@@ -435,7 +310,6 @@ namespace Gui
             }
         }
 
-        // Drawn behind the fighter: Berserker rage glow, Duelist cape.
         private void DrawSkinBackdrop(Graphics g, float x, float cy, bool faceRight, int skinIndex)
         {
             if (skinIndex == 2)
@@ -464,7 +338,6 @@ namespace Gui
             }
         }
 
-        // Drawn on the fighter: armor pieces first, then the skin details on top.
         private void DrawFighterGear(Graphics g, float x, float cy, int action, bool faceRight, Loadout loadout, FighterInfo fighter)
         {
             float[] legXs = action == 2 ? new[] { x + 40f } : new[] { x + 26f, x + 58f };
@@ -472,7 +345,7 @@ namespace Gui
 
             switch (loadout.ArmorIndex)
             {
-                case 1: // Leather Wraps
+                case 1:
                     using (SolidBrush leather = new SolidBrush(Color.FromArgb(139, 90, 43)))
                     {
                         g.FillRectangle(leather, x + 30, cy + 58, 48, 7);
@@ -485,7 +358,7 @@ namespace Gui
                     }
                     break;
 
-                case 2: // Steel Plating
+                case 2:
                     using (SolidBrush steel = new SolidBrush(Color.FromArgb(150, 160, 175)))
                     using (SolidBrush steelLight = new SolidBrush(Color.FromArgb(205, 215, 228)))
                     using (Pen steelEdge = new Pen(Color.FromArgb(70, 75, 90), 2))
@@ -505,7 +378,7 @@ namespace Gui
                     }
                     break;
 
-                case 3: // Titan Plate
+                case 3:
                     using (SolidBrush plate = new SolidBrush(Color.FromArgb(55, 55, 72)))
                     using (SolidBrush gold = new SolidBrush(Color.Gold))
                     using (SolidBrush core = new SolidBrush(fighter.AuraColor))
@@ -531,7 +404,7 @@ namespace Gui
 
             switch (loadout.SkinIndex)
             {
-                case 1: // Vanguard: blue guard emblem + shoulder guards
+                case 1:
                     PointF[] emblem =
                     {
                         new PointF(x + 44, cy + 50), new PointF(x + 64, cy + 50), new PointF(x + 64, cy + 68),
@@ -547,7 +420,7 @@ namespace Gui
                     }
                     break;
 
-                case 2: // Berserker: red headband with tails + war paint
+                case 2:
                     float wave = (float)Math.Sin(bounceCycle * 3f) * 4f;
                     PointF[] tails = faceRight
                         ? new PointF[] { new PointF(x + 35, cy + 9), new PointF(x + 10, cy + 2 + wave), new PointF(x + 14, cy + 18 - wave), new PointF(x + 35, cy + 15) }
@@ -566,7 +439,7 @@ namespace Gui
                     }
                     break;
 
-                case 3: // Duelist: gold sash
+                case 3:
                     using (Pen sash = new Pen(Color.Gold, 6))
                     {
                         g.DrawLine(sash, x + 32, cy + 46, x + 78, cy + 98);
@@ -577,6 +450,7 @@ namespace Gui
 
         private void DrawFighterReflection(Graphics g, float x, float y, int action, bool faceRight, FighterInfo fighter)
         {
+            if (FighterSprites.Available) return; // the old shape reflection looked like colored blobs under the sprite
             if (y < GroundLevel - 30) return;
             float refY = GroundLevel + 160 + (GroundLevel + 160 - (y + 160));
             using (SolidBrush refBrush = new SolidBrush(Color.FromArgb(35, fighter.AuraColor)))

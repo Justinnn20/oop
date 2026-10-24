@@ -6,9 +6,6 @@ using System.Windows.Forms;
 
 namespace Gui
 {
-    /// <summary>
-    /// Keyboard input for every screen.
-    /// </summary>
     public partial class Form1 : Form
     {
         private void Form1_KeyDown(object? sender, KeyEventArgs e)
@@ -56,20 +53,18 @@ namespace Gui
             {
                 if (e.KeyCode == Keys.Left) ChangeArena(-1);
                 if (e.KeyCode == Keys.Right) ChangeArena(1);
-                if (e.KeyCode == Keys.Enter) OpenArmory();
+
+                // BYPASS SHOP/ARMORY MECHANIC
+                if (e.KeyCode == Keys.Enter) StartMatch();
+
                 if (e.KeyCode == Keys.Back)
                 {
                     currentState = GameState.CharSelect;
                     if (isVsCPU) p1Locked = false;
                 }
             }
-            else if (currentState == GameState.Armory)
-            {
-                HandleArmoryInput(e);
-            }
             else if (currentState == GameState.Battle)
             {
-                // Player 1: move/jump, then skill slots 1-3
                 if (e.KeyCode == Keys.A && p1X > 80) p1VelX = -13 * SpeedFactor(1);
                 if (e.KeyCode == Keys.D && p1X < p2X - 70) p1VelX = 13 * SpeedFactor(1);
                 if (e.KeyCode == Keys.W && p1Y >= GroundLevel) { p1VelY = -22; Sfx.Play(440, 60); }
@@ -79,7 +74,6 @@ namespace Gui
 
                 if (!isVsCPU)
                 {
-                    // Player 2: move/jump, then skill slots 1-3
                     if (e.KeyCode == Keys.J && p2X > p1X + 70) p2VelX = -13 * SpeedFactor(2);
                     if (e.KeyCode == Keys.L && p2X < this.ClientSize.Width - 160) p2VelX = 13 * SpeedFactor(2);
                     if (e.KeyCode == Keys.I && p2Y >= GroundLevel) { p2VelY = -22; Sfx.Play(440, 60); }

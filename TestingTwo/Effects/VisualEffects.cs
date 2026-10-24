@@ -28,6 +28,12 @@ namespace Gui
         public float X, Y;
         public Color Color;
         public int Alpha;
+
+        // Which sprite pose to repeat as the after-image
+        public string Animation = "Idle";
+        public int Frame;
+        public bool FaceRight = true;
+        public AgeStage Age = AgeStage.Youth;
     }
 
     internal class Particle

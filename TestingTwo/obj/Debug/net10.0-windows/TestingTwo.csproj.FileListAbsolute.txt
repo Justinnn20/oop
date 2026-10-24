@@ -3,8 +3,6 @@ C:\Users\Jayvee\source\repos\TestingTwo\TestingTwo\bin\Debug\net10.0-windows\Tes
 C:\Users\Jayvee\source\repos\TestingTwo\TestingTwo\bin\Debug\net10.0-windows\TestingTwo.runtimeconfig.json
 C:\Users\Jayvee\source\repos\TestingTwo\TestingTwo\bin\Debug\net10.0-windows\TestingTwo.dll
 C:\Users\Jayvee\source\repos\TestingTwo\TestingTwo\bin\Debug\net10.0-windows\TestingTwo.pdb
-C:\Users\Jayvee\source\repos\TestingTwo\TestingTwo\obj\Debug\net10.0-windows\Gui.Form1.resources
-C:\Users\Jayvee\source\repos\TestingTwo\TestingTwo\obj\Debug\net10.0-windows\TestingTwo.csproj.GenerateResource.cache
 C:\Users\Jayvee\source\repos\TestingTwo\TestingTwo\obj\Debug\net10.0-windows\TestingTwo.GeneratedMSBuildEditorConfig.editorconfig
 C:\Users\Jayvee\source\repos\TestingTwo\TestingTwo\obj\Debug\net10.0-windows\TestingTwo.AssemblyInfoInputs.cache
 C:\Users\Jayvee\source\repos\TestingTwo\TestingTwo\obj\Debug\net10.0-windows\TestingTwo.AssemblyInfo.cs
@@ -16,3 +14,5 @@ C:\Users\Jayvee\source\repos\TestingTwo\TestingTwo\obj\Debug\net10.0-windows\Tes
 C:\Users\Jayvee\source\repos\TestingTwo\TestingTwo\obj\Debug\net10.0-windows\TestingTwo.genruntimeconfig.cache
 C:\Users\Jayvee\source\repos\TestingTwo\TestingTwo\obj\Debug\net10.0-windows\ref\TestingTwo.dll
 C:\Users\Jayvee\source\repos\TestingTwo\TestingTwo\obj\Debug\net10.0-windows\TestingTwo.csproj.Up2Date
+C:\Users\Jayvee\source\repos\TestingTwo\TestingTwo\obj\Debug\net10.0-windows\Gui.Form1.resources
+C:\Users\Jayvee\source\repos\TestingTwo\TestingTwo\obj\Debug\net10.0-windows\TestingTwo.csproj.GenerateResource.cache

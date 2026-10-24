@@ -13,47 +13,22 @@ namespace Gui
             new FighterInfo { Name = "Insu KAZAMA", Style = "Traditional Karate", PrimaryColor = Color.FromArgb(0, 150, 255), AuraColor = Color.Cyan, SpecialSkill = "Kazama Electric Fist" },
             new FighterInfo { Name = "Andre MISHIMA", Style = "Mishima Style Karate", PrimaryColor = Color.FromArgb(220, 20, 60), AuraColor = Color.MediumPurple, SpecialSkill = "Devil Laser Beam" },
             new FighterInfo { Name = "Justin Phoenix", Style = "Judo & Brawling", PrimaryColor = Color.FromArgb(255, 185, 0), AuraColor = Color.OrangeRed, SpecialSkill = "Phoenix Smasher" },
-            new FighterInfo { Name = "Jayvee Hworang", Style = "Tae Kwon Do", PrimaryColor = Color.FromArgb(0, 230, 120), AuraColor = Color.Lime, SpecialSkill = "Hunting Hawk Kick" }
+            new FighterInfo { Name = "Jayvee Hworang", Style = "Tae Kwon Do", PrimaryColor = Color.FromArgb(0, 230, 120), AuraColor = Color.Lime, SpecialSkill = "Hunting Hawk Kick" },
+            new FighterInfo { Name = "Grey Pants Brawler", Style = "Street Brawling", PrimaryColor = Color.Gray, AuraColor = Color.WhiteSmoke, SpecialSkill = "Jump Attack" }
         };
 
         // --- ARENAS ---
         public static readonly ArenaInfo[] Arenas = new ArenaInfo[]
         {
             new ArenaInfo {
-                Name = "VOLCANIC INFERNO",
-                Subtitle = "Active Crater & Molten Lava Surface",
-                SkyTop = Color.FromArgb(35, 5, 5),
-                SkyBottom = Color.FromArgb(140, 25, 0),
-                FloorColor = Color.FromArgb(28, 12, 10),
-                RingNeon = Color.FromArgb(255, 80, 0),
-                ParticleColor = Color.OrangeRed
-            },
-            new ArenaInfo {
-                Name = "MISHIMA DOJO",
-                Subtitle = "Ancient Pagoda Temple & Mystic Fog",
-                SkyTop = Color.FromArgb(18, 14, 25),
-                SkyBottom = Color.FromArgb(60, 45, 30),
-                FloorColor = Color.FromArgb(42, 28, 16),
-                RingNeon = Color.Gold,
-                ParticleColor = Color.FromArgb(255, 215, 120)
-            },
-            new ArenaInfo {
-                Name = "CYBER HIGHWAY",
-                Subtitle = "Futuristic Skyscrapers & Neon Lights",
-                SkyTop = Color.FromArgb(5, 5, 20),
-                SkyBottom = Color.FromArgb(25, 15, 55),
-                FloorColor = Color.FromArgb(14, 16, 26),
+                Name = "16-BIT HALLWAY",
+                Subtitle = "Lecture Room Block",
+                SkyTop = Color.FromArgb(40, 40, 50),
+                SkyBottom = Color.FromArgb(20, 20, 30),
+                FloorColor = Color.FromArgb(180, 170, 150),
                 RingNeon = Color.Cyan,
-                ParticleColor = Color.DeepSkyBlue
-            },
-            new ArenaInfo {
-                Name = "YAKUSHIMA FOREST",
-                Subtitle = "Deep Moonlit Wilderness & Sacred Pines",
-                SkyTop = Color.FromArgb(5, 18, 15),
-                SkyBottom = Color.FromArgb(15, 45, 30),
-                FloorColor = Color.FromArgb(16, 28, 18),
-                RingNeon = Color.LimeGreen,
-                ParticleColor = Color.PaleGreen
+                ParticleColor = Color.LightSkyBlue,
+                BackgroundFile = "Hallway.jpg"
             },
             new ArenaInfo {
                 Name = "ELEVATOR LOBBY",
@@ -63,7 +38,7 @@ namespace Gui
                 FloorColor = Color.FromArgb(205, 175, 125),
                 RingNeon = Color.FromArgb(70, 160, 255),
                 ParticleColor = Color.FromArgb(255, 240, 190),
-                BackgroundFile = "elevator_lobby.png"
+                BackgroundFile = "elevator_16bit.png"
             }
         };
 
